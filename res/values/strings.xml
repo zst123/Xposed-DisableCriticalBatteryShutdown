@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">DisableCriticalBatteryShutdown</string>
+    <string name="app_info">Disables the Auto-Shutdown when Android detects a critical battery level (zst123)</string>
+    
+    <string name="notification_title">Blocked Shutdown %1$s time(s)</string>
+    <string name="notification_summary">Android tried to shut down your phone due to your critical battery level.</string>
+
+</resources>
