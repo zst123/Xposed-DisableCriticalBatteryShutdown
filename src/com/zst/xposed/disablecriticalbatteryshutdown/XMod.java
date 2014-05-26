@@ -8,6 +8,7 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.XModuleResources;
+import android.os.BatteryManager;
 import android.os.Build;
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.IXposedHookZygoteInit;
@@ -28,6 +29,7 @@ public class XMod implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 	static NotificationManager mNotifManager;
 	static Context mContext;
 	static int mNumber;	
+	static boolean mHasNotifiedAtLeastOnce;
 	
 	@Override
 	public void initZygote(StartupParam startupParam) throws Throwable {
@@ -49,25 +51,61 @@ public class XMod implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 			}
 		});
 		
-		XposedBridge.hookAllMethods(battService, "shutdownIfNoPower", new XC_MethodHook() {
+		XC_MethodHook hook = new XC_MethodHook() {
 			@Override
 			protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
 				param.setResult(null);
 				
 				final Object thiz = param.thisObject;
-				final int battLevel = (Integer) XposedHelpers.callMethod(thiz, "getBatteryLevel");
-				final boolean isPowered = (Boolean) XposedHelpers.callMethod(thiz, "isPowered");
+				
+				int battLevel = -2;
+				try {
+					// Android 4.4.1 and above
+					// https://github.com/android/platform_frameworks_base/commit/26faecc85ec3e809135b287173997e97fcb8fc30
+					Object battery_prop = XposedHelpers.getObjectField(thiz, "mBatteryProps");
+					battLevel = XposedHelpers.getIntField(battery_prop, "batteryLevel");
+				} catch (Exception e) {
+					// could not find BatteryProperties object
+					// Android 4.4.0 and below
+					try {
+						battLevel = (Integer) XposedHelpers.callMethod(thiz, "getBatteryLevel");
+					} catch (Exception e1) {
+					}
+				}
+				
+				Boolean isPowered = null;
+				try {
+					// Android 4.2.1 and above
+					//https://github.com/android/platform_frameworks_base/commit/a4d8204e3068b9d8d6908d4cf3440e81967867a3
+					isPowered = (Boolean) XposedHelpers.callMethod(thiz, "isPowered", 
+							(BatteryManager.BATTERY_PLUGGED_AC | BatteryManager.BATTERY_PLUGGED_USB | BatteryManager.BATTERY_PLUGGED_WIRELESS));
+				} catch (Exception e) {
+					// Android 4.2.0 and below
+					try {
+						isPowered = (Boolean) XposedHelpers.callMethod(thiz, "isPowered");
+					} catch (Exception e1) {
+					}
+				}
+				
 				// shut down gracefully if our battery is critically low and we are not powered.
-				if (battLevel == 0 && !isPowered) {
-					notifyUser();
+				if (battLevel == -2 || isPowered == null) {
+					// That means our detection failed.
+					if (!mHasNotifiedAtLeastOnce) {
+						notifyUser(false);
+					}
+				} else if (battLevel == 0 && !isPowered) {
+					notifyUser(true);
 				}
 			}
-		});
+		};
+		XposedBridge.hookAllMethods(battService, "shutdownIfNoPower", hook);
+		XposedBridge.hookAllMethods(battService, "shutdownIfNoPowerLocked", hook);
 	}
 	
 	@SuppressLint("NewApi")
 	@SuppressWarnings("deprecation")
-	private void notifyUser() {
+	private void notifyUser(boolean detection_working) {
+		mHasNotifiedAtLeastOnce = true;
 		mNumber++;
 		if (Build.VERSION.SDK_INT < 11) {
 			final String title = String.format(mModRes.getString(R.string.notification_title), mNumber);
@@ -83,8 +121,9 @@ public class XMod implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 			Notification.Builder build = new Notification.Builder(mContext);
 			build.setOngoing(true);
 			build.setSmallIcon(android.R.drawable.ic_dialog_alert);
-			build.setContentTitle(String.format(mModRes.getString(R.string.notification_title),
-					mNumber));
+			build.setContentTitle(detection_working ? 
+					String.format(mModRes.getString(R.string.notification_title), mNumber)
+					: mModRes.getString(R.string.notification_title_alt));
 			build.setContentText(mModRes.getString(R.string.notification_summary));
 			
 			if (Build.VERSION.SDK_INT <= 15) {
