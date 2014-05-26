@@ -1,6 +1,7 @@
 package com.zst.xposed.disablecriticalbatteryshutdown;
 
 import static de.robv.android.xposed.XposedHelpers.findClass;
+import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -64,6 +65,7 @@ public class XMod implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 		});
 	}
 	
+	@SuppressLint("NewApi")
 	@SuppressWarnings("deprecation")
 	private void notifyUser() {
 		mNumber++;
