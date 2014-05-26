@@ -51,13 +51,14 @@ public class XMod implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 		XposedBridge.hookAllMethods(battService, "shutdownIfNoPower", new XC_MethodHook() {
 			@Override
 			protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+				param.setResult(null);
+				
 				final Object thiz = param.thisObject;
 				final int battLevel = (Integer) XposedHelpers.callMethod(thiz, "getBatteryLevel");
 				final boolean isPowered = (Boolean) XposedHelpers.callMethod(thiz, "isPowered");
 				// shut down gracefully if our battery is critically low and we are not powered.
 				if (battLevel == 0 && !isPowered) {
 					notifyUser();
-					param.setResult(null);
 				}
 			}
 		});
