@@ -38,7 +38,6 @@ public class XMod implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 		if (!lpp.packageName.equals(PKG_SYSTEM)) return;
 		
 		final Class<?> battService = findClass(PKG_BATTERY_SERVICE, lpp.classLoader);
-		final Class<?> amn = findClass(PKG_ACTIVITY_MANAGER_NATIVE, lpp.classLoader);
 		
 		XposedBridge.hookAllConstructors(battService, new XC_MethodHook() {
 			@Override
@@ -55,11 +54,8 @@ public class XMod implements IXposedHookLoadPackage, IXposedHookZygoteInit {
 				final Object thiz = param.thisObject;
 				final int battLevel = (Integer) XposedHelpers.callMethod(thiz, "getBatteryLevel");
 				final boolean isPowered = (Boolean) XposedHelpers.callMethod(thiz, "isPowered");
-				final boolean isSystemReady = (Boolean) XposedHelpers.callStaticMethod(amn,
-						"isSystemReady");
 				// shut down gracefully if our battery is critically low and we are not powered.
-				// wait until the system has booted before attempting to display the shutdown dialog.
-				if (battLevel == 0 && !isPowered && isSystemReady) {
+				if (battLevel == 0 && !isPowered) {
 					notifyUser();
 					param.setResult(null);
 				}
